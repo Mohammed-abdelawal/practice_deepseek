@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 from typing import List, Dict, Any, Literal
+from logging import getLogger
 
 from tinydb import TinyDB, where
 from tinydb.storages import JSONStorage
@@ -30,6 +31,8 @@ db = TinyDB(DB_PATH, storage=CachingMiddleware(JSONStorage))
 orders_table = db.table("orders")
 sessions_table = db.table("sessions")
 
+logger = getLogger(__name__)
+
 # ──────────────────────────────────────────────────────────────────────────
 #  ORDERS
 # ──────────────────────────────────────────────────────────────────────────
@@ -44,12 +47,14 @@ async def create_order(order_data: Dict[str, Any]) -> Order:
     """
     order_data = dict(order_data)  # shallow copy
     order_data.setdefault("order_id", str(uuid4()))
+    logger.debug("Creating order: %s", order_data)
     orders_table.insert(order_data)
     db.storage.flush()  # force write‑through
     return order_data
 
 
 async def get_order(order_id: str) -> Order | None:
+    logger.debug("Fetching order: %s", order_id)
     return orders_table.get(where("order_id") == order_id)
 
 
@@ -59,7 +64,9 @@ async def update_order(order_id: str, updates: Dict[str, Any]) -> Order | None:
     Returns the updated order or None if not found.
     """
     if not orders_table.contains(where("order_id") == order_id):
+        logger.debug("Order not found for update: %s", order_id)
         return None
+    logger.debug("Updating order %s with %s", order_id, updates)
     orders_table.update(updates, where("order_id") == order_id)
     db.storage.flush()
     return await get_order(order_id)
@@ -69,6 +76,7 @@ async def delete_order(order_id: str) -> bool:
     """
     Returns True if order deleted, False if order_id not found.
     """
+    logger.debug("Deleting order: %s", order_id)
     removed = orders_table.remove(where("order_id") == order_id)
     if removed:
         db.storage.flush()
@@ -100,12 +108,14 @@ async def search_orders(filters: List[Dict[str, Any]]) -> List[Order]:
     import re
 
     if not filters:
+        logger.debug("Searching orders with no filters")
         return orders_table.all()
 
     query = _build_query(filters[0])
     for f in filters[1:]:
         query &= _build_query(f)
 
+    logger.debug("Searching orders with filters: %s", filters)
     return orders_table.search(query)
 
 
@@ -115,11 +125,15 @@ async def search_orders(filters: List[Dict[str, Any]]) -> List[Order]:
 
 
 async def load_history(session_id: str) -> List[Dict[str, str]]:
+    logger.debug("Loading history for session: %s", session_id)
     row = sessions_table.get(where("session_id") == session_id)
-    return row["history"] if row else []
+    history = row["history"] if row else []
+    logger.debug("Loaded %d messages", len(history))
+    return history
 
 
 async def save_history(session_id: str, history: List[Dict[str, str]]) -> None:
+    logger.debug("Saving history for session %s, %d messages", session_id, len(history))
     sessions_table.upsert(
         {"session_id": session_id, "history": history},
         where("session_id") == session_id,
@@ -128,6 +142,7 @@ async def save_history(session_id: str, history: List[Dict[str, str]]) -> None:
 
 
 async def delete_session(session_id: str) -> bool:
+    logger.debug("Deleting session: %s", session_id)
     removed = sessions_table.remove(where("session_id") == session_id)
     if removed:
         db.storage.flush()

@@ -174,6 +174,7 @@ TOOLS: List[Dict[str, Any]] = [
 
 def _ensure_system(history: List[Dict[str, str]]) -> None:
     if not history or history[0]["role"] != "system":
+        logger.debug("Inserting system prompt")
         history.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
 
@@ -194,7 +195,8 @@ def _msg_to_dict(
 
 async def _chat(history: List[Dict[str, str]], choice: str = "auto") -> Any:
     """Send chat request; choice='auto' or 'none'."""
-    return await aclient.chat.completions.create(
+    logger.debug("Sending chat completion with %d messages", len(history))
+    result = await aclient.chat.completions.create(
         model=get_chat_model_name(),
         messages=history,
         tools=TOOLS,
@@ -202,6 +204,8 @@ async def _chat(history: List[Dict[str, str]], choice: str = "auto") -> Any:
         temperature=0.4,
         max_tokens=300,
     )
+    logger.debug("Received chat completion")
+    return result
 
 
 async def _run_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -236,6 +240,7 @@ async def _run_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _handle(choice: Any, history: List[Dict[str, str]]) -> str:
     """Handle either plain text or tool‑call response."""
+    logger.debug("Handling choice with finish_reason=%s", choice.finish_reason)
     if choice.finish_reason not in ("function_call", "tool_calls"):
         assistant = choice.message.content or "(no content)"
         history.append({"role": "assistant", "content": assistant})
@@ -275,6 +280,7 @@ async def _handle(choice: Any, history: List[Dict[str, str]]) -> str:
     follow = await _chat(history, choice="none")
     assistant = follow.choices[0].message.content
     history.append({"role": "assistant", "content": assistant})
+    logger.debug("Assistant final reply: %s", assistant)
     return assistant
 
 
@@ -284,6 +290,7 @@ async def _handle(choice: Any, history: List[Dict[str, str]]) -> str:
 async def process_user_message(
     session_id: str, user_message: str
 ) -> Tuple[str, List[Dict[str, str]]]:
+    logger.debug("Processing message for session %s: %s", session_id, user_message)
     history = await json_db.load_history(session_id)
     _ensure_system(history)
     history.append({"role": "user", "content": user_message})
@@ -296,4 +303,5 @@ async def process_user_message(
     # schedule background trimming so we don't block the user request
     schedule_trim(session_id)
 
+    logger.debug("Reply: %s", reply)
     return reply, history
