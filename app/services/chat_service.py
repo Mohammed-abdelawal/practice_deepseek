@@ -23,6 +23,7 @@ from logging import getLogger
 
 from app.utils.openai_client import get_async_client, get_chat_model_name
 from app.utils import json_db
+from app.services.history_manager import schedule_trim
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -291,4 +292,8 @@ async def process_user_message(
     reply = await _handle(first.choices[0], history)
 
     await json_db.save_history(session_id, history)
+
+    # schedule background trimming so we don't block the user request
+    schedule_trim(session_id)
+
     return reply, history
