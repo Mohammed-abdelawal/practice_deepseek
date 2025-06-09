@@ -160,7 +160,7 @@ TOOLS: List[Dict[str, Any]] = [
                         },
                     },
                 },
-                "required": ["order_id", "action"],
+                "required": ["order_id", "items"],
             },
         },
     },
