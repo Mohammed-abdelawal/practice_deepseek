@@ -1,5 +1,6 @@
 # app/utils/openai_client.py
 import os
+from logging import getLogger
 from openai import AsyncOpenAI
 
 __all__ = [
@@ -9,6 +10,7 @@ __all__ = [
 ]
 
 _client: AsyncOpenAI | None = None  # singleton
+logger = getLogger(__name__)
 
 
 def configure_openai(api_key: str, api_base: str):
@@ -18,6 +20,8 @@ def configure_openai(api_key: str, api_base: str):
     """
     os.environ["OPENAI_API_KEY"] = api_key
     os.environ["OPENAI_BASE_URL"] = api_base
+
+    logger.debug("Configuring OpenAI client with base %s", api_base)
 
     global _client
     _client = AsyncOpenAI(api_key=api_key, base_url=api_base)
@@ -42,4 +46,6 @@ def get_chat_model_name() -> str:
     """
     Central place to pick the Deepseek chat model ID.
     """
-    return "deepseek-chat"
+    name = "deepseek-chat"
+    logger.debug("Using chat model %s", name)
+    return name
